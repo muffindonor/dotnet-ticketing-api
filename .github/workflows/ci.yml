@@ -1,0 +1,19 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - run: dotnet restore Ticketing.slnx
+      - run: dotnet build Ticketing.slnx -c Release --no-restore
+      # The Control test proves the naive approach fails. It relies on a race, so it stays out of CI.
+      - run: dotnet test Ticketing.slnx -c Release --no-build --filter "Category!=Control"

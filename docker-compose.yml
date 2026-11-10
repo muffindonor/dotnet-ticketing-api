@@ -1,0 +1,74 @@
+# Infrastructure only:   docker compose up -d --wait
+# Whole system:          docker compose --profile app up -d --build --wait
+#
+# SA_PASSWORD has a default for local development only. ACCEPT_EULA accepts the
+# SQL Server Developer edition licence, which does not cover production use.
+services:
+  sql:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: ${SA_PASSWORD:-Local_Dev_Only_1!}
+    ports:
+      - "14333:1433"
+    volumes:
+      - sql-data:/var/opt/mssql
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -Q 'SELECT 1' -b"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 15s
+
+  rabbitmq:
+    image: rabbitmq:4-management
+    # RabbitMQ stores its data per hostname, so this must stay fixed for messages to survive.
+    hostname: rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbit-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
+
+  api:
+    profiles: ["app"]
+    build:
+      context: .
+      dockerfile: src/Ticketing.Api/Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__Sql: Server=sql;Database=Ticketing;User Id=sa;Password=${SA_PASSWORD:-Local_Dev_Only_1!};TrustServerCertificate=True
+      RabbitMq__Uri: amqp://guest:guest@rabbitmq:5672/
+    ports:
+      - "5080:8080"
+    healthcheck:
+      # The .NET runtime image has no curl, so this speaks HTTP through bash.
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /health/ready HTTP/1.0\\r\\nHost: localhost\\r\\n\\r\\n' >&3 && grep -q '200 OK' <&3"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 5s
+    depends_on:
+      sql: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+
+  payment-worker:
+    profiles: ["app"]
+    build:
+      context: .
+      dockerfile: src/Ticketing.PaymentWorker/Dockerfile
+    environment:
+      DOTNET_ENVIRONMENT: Production
+      RabbitMq__Uri: amqp://guest:guest@rabbitmq:5672/
+    depends_on:
+      rabbitmq: { condition: service_healthy }
+
+volumes:
+  sql-data:
+  rabbit-data:
