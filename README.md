@@ -4,7 +4,7 @@ A concert-ticketing backend built on .NET 10 whose main job is to never sell the
 
 Customers browse events, hold a seat for 10 minutes and pay through a simulated payment service. Unpaid holds expire and the seat goes back on sale.
 
-**Stack:** C#, ASP.NET Core, EF Core, SQL Server, RabbitMQ, JWT auth, xUnit, Testcontainers, Docker. A GitHub Actions workflow is included, but it hasn't run yet.
+**Stack:** C#, ASP.NET Core, EF Core, SQL Server, RabbitMQ, JWT auth, xUnit, Testcontainers, Docker. A GitHub Actions workflow builds and tests it on every push.
 
 ## Load test: 500 concurrent requests for one seat, 0 double bookings
 
